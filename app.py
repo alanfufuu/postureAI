@@ -2,18 +2,24 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import tensorflow as tf
+import time 
 
 model = tf.keras.models.load_model('posture_classifier.h5')
+
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 mp_drawing = mp.solutions.drawing_utils
 
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(1) # Make sure this camera index is correct for you
 if not cap.isOpened():
     print("Error: Cannot open camera.")
     exit()
     
 class_names = ['Good', 'Poor']
+
+
+bad_posture_start_time = None
+notification_interval = 15 
 
 print("Starting live posture detection...")
 print("Press 'q' to quit.")
@@ -29,12 +35,12 @@ while cap.isOpened():
 
     slouch_status = "Unknown"
     shoulder_status = "Unknown"
+    is_bad_posture = False
 
     if results.pose_landmarks:
         try:
             landmarks = results.pose_landmarks.landmark
             
-            # --- 1. SLOUCH DETECTION (using the new model) ---
             nose = [landmarks[mp_pose.PoseLandmark.NOSE.value].x, landmarks[mp_pose.PoseLandmark.NOSE.value].y]
             l_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
             r_shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
@@ -42,33 +48,43 @@ while cap.isOpened():
             r_ear = [landmarks[mp_pose.PoseLandmark.RIGHT_EAR.value].x, landmarks[mp_pose.PoseLandmark.RIGHT_EAR.value].y]
             
             input_data = np.array([nose + l_shoulder + r_shoulder + l_ear + r_ear])
-            prediction = model.predict(input_data)
+            prediction = model.predict(input_data, verbose=0)
             slouch_status = class_names[np.argmax(prediction)]
 
-            # --- 2. SHOULDER IMBALANCE CHECK (new rule-based check) ---
             left_y = l_shoulder[1]
             right_y = r_shoulder[1]
-            
-            # Use shoulder width as a reference for the threshold
             shoulder_width = abs(l_shoulder[0] - r_shoulder[0])
-            threshold = shoulder_width * 0.08  # 8% of shoulder width as threshold
+            threshold = shoulder_width * 0.08
 
             if abs(left_y - right_y) > threshold:
                 shoulder_status = "Uneven"
             else:
                 shoulder_status = "Even"
 
+            if slouch_status == 'Poor' or shoulder_status == 'Uneven':
+                is_bad_posture = True
+            
             mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         except Exception as e:
             slouch_status = "Error"
-            print(f'Classification error: {e}')
+    
+    if is_bad_posture:
+        if bad_posture_start_time is None:
+            bad_posture_start_time = time.time()
+        
+        elapsed_time = time.time() - bad_posture_start_time
+        
+        if elapsed_time >= notification_interval:
+            print('\a')
+            bad_posture_start_time = None 
+            
+    else:
+        bad_posture_start_time = None
 
-    # Display Slouch Status
     slouch_color = (0, 0, 255) if slouch_status == 'Poor' else (0, 255, 0)
     cv2.putText(image, f'Slouch: {slouch_status}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, slouch_color, 2, cv2.LINE_AA)
     
-    # Display Shoulder Status
     shoulder_color = (0, 0, 255) if shoulder_status == 'Uneven' else (0, 255, 0)
     cv2.putText(image, f'Shoulders: {shoulder_status}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, shoulder_color, 2, cv2.LINE_AA)
     

@@ -26,8 +26,7 @@ print("Press 'g' for good posture, 'b' for bad posture, and 'q' to quit.")
 
 with open(csv_file, 'w', newline='') as f: # 'w' to write instead of append
     writer = csv.writer(f)
-    if not file_exists:
-        writer.writerow(csv_header)
+    writer.writerow(csv_header)
     
     current_class = 'unknown'
 
