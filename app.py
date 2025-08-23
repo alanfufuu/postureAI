@@ -3,6 +3,8 @@ import mediapipe as mp
 import numpy as np
 import tensorflow as tf
 import time 
+from playsound import playsound
+import os
 
 model = tf.keras.models.load_model('posture_classifier.h5')
 
@@ -10,13 +12,15 @@ mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 mp_drawing = mp.solutions.drawing_utils
 
-cap = cv2.VideoCapture(1) # Make sure this camera index is correct for you
+cap = cv2.VideoCapture(0) # Make sure this camera index is correct for you
 if not cap.isOpened():
     print("Error: Cannot open camera.")
     exit()
     
 class_names = ['Good', 'Poor']
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sound_path = os.path.join(script_dir, "bell.wav")
 
 bad_posture_start_time = None
 notification_interval = 15 
@@ -76,14 +80,14 @@ while cap.isOpened():
         elapsed_time = time.time() - bad_posture_start_time
         
         if elapsed_time >= notification_interval:
-            print('\a')
+            playsound(sound_path)
             bad_posture_start_time = None 
             
     else:
         bad_posture_start_time = None
 
     slouch_color = (0, 0, 255) if slouch_status == 'Poor' else (0, 255, 0)
-    cv2.putText(image, f'Slouch: {slouch_status}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, slouch_color, 2, cv2.LINE_AA)
+    cv2.putText(image, f'Posture: {slouch_status}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, slouch_color, 2, cv2.LINE_AA)
     
     shoulder_color = (0, 0, 255) if shoulder_status == 'Uneven' else (0, 255, 0)
     cv2.putText(image, f'Shoulders: {shoulder_status}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, shoulder_color, 2, cv2.LINE_AA)
