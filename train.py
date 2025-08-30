@@ -7,22 +7,20 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 import math
+import joblib
 
 df = pd.read_csv("posture_data.csv")
-
-
 X_raw = df.drop("class", axis=1).values
 y = df["class"].values
 
 def compute_features(row):
     nose_x, nose_y, ls_x, ls_y, rs_x, rs_y, le_x, le_y, re_x, re_y = row
 
-    shoulder_width = abs(ls_x - rs_x) + 1e-6 
+    shoulder_width = abs(ls_x - rs_x) + 1e-6
 
     shoulder_slope = (ls_y - rs_y) / shoulder_width
-
-    le_dist = math.sqrt((le_x - ls_x) ** 2 + (le_y - ls_y) ** 2) / shoulder_width
-    re_dist = math.sqrt((re_x - rs_x) ** 2 + (re_y - rs_y) ** 2) / shoulder_width
+    le_dist = np.sqrt((le_x - ls_x) ** 2 + (le_y - ls_y) ** 2) / shoulder_width
+    re_dist = np.sqrt((re_x - rs_x) ** 2 + (re_y - rs_y) ** 2) / shoulder_width
 
     ear_line_slope = (le_y - re_y) / (le_x - re_x + 1e-6)
     shoulder_line_slope = (ls_y - rs_y) / (ls_x - rs_x + 1e-6)
@@ -42,6 +40,8 @@ y_categorical = tf.keras.utils.to_categorical(y_encoded)
 
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_features)
+
+joblib.dump(scaler, "scaler.pkl")
 
 X_train, X_test, y_train, y_test = train_test_split(
     X_scaled, y_categorical,
@@ -73,7 +73,7 @@ model.compile(
 
 callbacks = [
     EarlyStopping(monitor="val_loss", patience=12, restore_best_weights=True),
-    ModelCheckpoint("best_posture_model.h5", monitor="val_accuracy", save_best_only=True),
+    ModelCheckpoint("posture_classifier.h5", monitor="val_accuracy", save_best_only=True),
     ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=5, verbose=1)
 ]
 
@@ -88,10 +88,9 @@ history = model.fit(
 )
 
 model.save("posture_classifier.h5")
-print(f"✅ Model trained and saved as posture_classifier.h5")
+print("Model trained and saved as posture_classifier.h5")
 
 loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
-print(f"\n🎯 Test Accuracy: {accuracy*100:.2f}%")
-
+print(f"🎯 Test Accuracy: {accuracy*100:.2f}%")
 
 
